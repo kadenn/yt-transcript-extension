@@ -22,41 +22,112 @@ function waitForElement(selector, timeout = 5000) {
   });
 }
 
-async function openTranscriptPanel() {
-  // If transcript panel is already open and has segments, use it directly
-  const existing = document.querySelector("ytd-transcript-segment-renderer");
-  if (existing) return;
+async function tryExpandDescription() {
+  // Multiple selectors for different YouTube design versions
+  const expandSelectors = [
+    // Newer YouTube design (2024-2025)
+    "ytd-text-inline-expander tp-yt-paper-button",
+    "#description-inline-expander tp-yt-paper-button",
+    "#description tp-yt-paper-button",
+    // Even newer (no paper elements)
+    "ytd-text-inline-expander button",
+    "#expand",
+    "tp-yt-paper-button#expand",
+    "ytd-structured-description-content-renderer tp-yt-paper-button",
+    // Generic fallback: any visible "more" button in description area
+    "#meta button",
+    "#info button",
+  ];
 
-  // Click "Show more" in description if not already expanded
-  const expandBtn = document.querySelector(
-    "tp-yt-paper-button#expand, ytd-text-inline-expander #expand-sizer tp-yt-paper-button, #description-inline-expander #expand"
-  );
-  if (expandBtn) {
-    expandBtn.click();
-    await wait(400);
+  for (const sel of expandSelectors) {
+    try {
+      const candidates = Array.from(document.querySelectorAll(sel));
+      const btn = candidates.find((el) => {
+        const text = el.textContent.trim().toLowerCase();
+        return (
+          text.includes("more") ||
+          text.includes("daha") ||
+          text.includes("show") ||
+          text.includes("expand") ||
+          text === "..."
+        );
+      });
+      if (btn && btn.offsetParent !== null) {
+        btn.click();
+        await wait(600);
+        return true;
+      }
+    } catch (_) {}
+  }
+  return false;
+}
+
+async function findTranscriptButton() {
+  // Ordered from most specific to broadest
+  const containerSelectors = [
+    "ytd-video-description-transcript-section-renderer",
+    "ytd-structured-description-content-renderer",
+    "#description",
+    "#meta",
+    "#secondary",
+    "ytd-watch-flexy",
+    "body",
+  ];
+
+  for (const container of containerSelectors) {
+    const root = document.querySelector(container);
+    if (!root) continue;
+
+    const buttons = Array.from(
+      root.querySelectorAll("button, tp-yt-paper-button, yt-button-shape button")
+    );
+
+    const found = buttons.find((btn) => {
+      const text = btn.textContent.trim().toLowerCase();
+      return (
+        text.includes("transcript") ||
+        text.includes("transkript") ||
+        text.includes("altyazı") ||
+        text.includes("subtitle")
+      );
+    });
+
+    if (found) return found;
   }
 
-  // Find and click "Show transcript" button
-  const allButtons = Array.from(
-    document.querySelectorAll(
-      "ytd-video-description-transcript-section-renderer button, " +
-      "yt-button-shape button, " +
-      "ytd-button-renderer button"
-    )
-  );
+  return null;
+}
 
-  const transcriptBtn = allButtons.find((btn) => {
-    const text = btn.textContent.trim().toLowerCase();
-    return text.includes("transcript") || text.includes("transkript");
-  });
+async function openTranscriptPanel() {
+  // Already open?
+  if (document.querySelector("ytd-transcript-segment-renderer")) return;
 
-  if (!transcriptBtn) throw new Error('Could not find "Show transcript" button. Try opening it manually first.');
+  // Try to expand description (don't fail if it doesn't work)
+  await tryExpandDescription();
+
+  // Give DOM time to settle after expansion
+  await wait(400);
+
+  // Find transcript button
+  let transcriptBtn = await findTranscriptButton();
+
+  // If not found after expanding, wait a bit and retry
+  if (!transcriptBtn) {
+    await wait(800);
+    transcriptBtn = await findTranscriptButton();
+  }
+
+  if (!transcriptBtn) {
+    throw new Error(
+      'Could not find "Show transcript" button. The video may not have a transcript, or try scrolling down to the description first.'
+    );
+  }
 
   transcriptBtn.click();
 
-  // Wait for segments to render
-  await waitForElement("ytd-transcript-segment-renderer", 6000);
-  await wait(300); // let all segments paint
+  // Wait for transcript segments to appear
+  await waitForElement("ytd-transcript-segment-renderer", 8000);
+  await wait(400);
 }
 
 async function scrapeTranscript() {

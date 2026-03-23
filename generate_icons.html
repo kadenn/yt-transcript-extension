@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<body>
+<canvas id="c"></canvas>
+<script>
+// Run this file in a browser to download icons, or just use any 16/48/128px PNG
+const sizes = [16, 48, 128];
+sizes.forEach(size => {
+  const c = document.createElement("canvas");
+  c.width = c.height = size;
+  const ctx = c.getContext("2d");
+
+  // Dark rounded background
+  const r = size * 0.18;
+  ctx.fillStyle = "#1a1a1a";
+  ctx.beginPath();
+  ctx.moveTo(r, 0);
+  ctx.lineTo(size - r, 0);
+  ctx.arcTo(size, 0, size, r, r);
+  ctx.lineTo(size, size - r);
+  ctx.arcTo(size, size, size - r, size, r);
+  ctx.lineTo(r, size);
+  ctx.arcTo(0, size, 0, size - r, r);
+  ctx.lineTo(0, r);
+  ctx.arcTo(0, 0, r, 0, r);
+  ctx.closePath();
+  ctx.fill();
+
+  // Draw clipboard icon in white
+  const p = size * 0.18;  // padding
+  const w = size - p * 2; // content width
+  const h = size - p * 2; // content height
+
+  ctx.fillStyle = "#FFFFFF";
+  ctx.strokeStyle = "#FFFFFF";
+  ctx.lineWidth = size * 0.07;
+  ctx.lineJoin = "round";
+
+  // Clipboard body
+  const bodyX = p + w * 0.1;
+  const bodyY = p + h * 0.15;
+  const bodyW = w * 0.8;
+  const bodyH = h * 0.78;
+  const bodyR = size * 0.07;
+
+  ctx.beginPath();
+  ctx.moveTo(bodyX + bodyR, bodyY);
+  ctx.lineTo(bodyX + bodyW - bodyR, bodyY);
+  ctx.arcTo(bodyX + bodyW, bodyY, bodyX + bodyW, bodyY + bodyR, bodyR);
+  ctx.lineTo(bodyX + bodyW, bodyY + bodyH - bodyR);
+  ctx.arcTo(bodyX + bodyW, bodyY + bodyH, bodyX + bodyW - bodyR, bodyY + bodyH, bodyR);
+  ctx.lineTo(bodyX + bodyR, bodyY + bodyH);
+  ctx.arcTo(bodyX, bodyY + bodyH, bodyX, bodyY + bodyH - bodyR, bodyR);
+  ctx.lineTo(bodyX, bodyY + bodyR);
+  ctx.arcTo(bodyX, bodyY, bodyX + bodyR, bodyY, bodyR);
+  ctx.closePath();
+  ctx.fill();
+
+  // Clip tab on top (dark cutout)
+  const tabW = bodyW * 0.42;
+  const tabH = h * 0.14;
+  const tabX = bodyX + (bodyW - tabW) / 2;
+  const tabY = bodyY - tabH * 0.5;
+  const tabR = size * 0.05;
+
+  ctx.fillStyle = "#1a1a1a";
+  ctx.beginPath();
+  ctx.moveTo(tabX + tabR, tabY);
+  ctx.lineTo(tabX + tabW - tabR, tabY);
+  ctx.arcTo(tabX + tabW, tabY, tabX + tabW, tabY + tabR, tabR);
+  ctx.lineTo(tabX + tabW, tabY + tabH - tabR);
+  ctx.arcTo(tabX + tabW, tabY + tabH, tabX + tabW - tabR, tabY + tabH, tabR);
+  ctx.lineTo(tabX + tabR, tabY + tabH);
+  ctx.arcTo(tabX, tabY + tabH, tabX, tabY + tabH - tabR, tabR);
+  ctx.lineTo(tabX, tabY + tabR);
+  ctx.arcTo(tabX, tabY, tabX + tabR, tabY, tabR);
+  ctx.closePath();
+  ctx.fill();
+
+  // Lines on clipboard (dark, simulating text)
+  if (size >= 48) {
+    const lineX = bodyX + bodyW * 0.18;
+    const lineW = bodyW * 0.64;
+    const lineH = size * 0.055;
+    const lineR = lineH / 2;
+    const startY = bodyY + bodyH * 0.32;
+    const gap = bodyH * 0.2;
+
+    [0, 1, 2].forEach(i => {
+      const lw = i === 2 ? lineW * 0.65 : lineW;
+      const ly = startY + i * gap;
+      ctx.fillStyle = "#1a1a1a";
+      ctx.beginPath();
+      ctx.roundRect(lineX, ly, lw, lineH, lineR);
+      ctx.fill();
+    });
+  }
+
+  // Download
+  const a = document.createElement("a");
+  a.download = `icon${size}.png`;
+  a.href = c.toDataURL();
+  a.click();
+});
+</script>
+</body>
+</html>
