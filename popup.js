@@ -2,6 +2,7 @@ const statusEl = document.getElementById("status");
 const previewEl = document.getElementById("preview");
 const copyBtn = document.getElementById("copyBtn");
 const copyTimestampBtn = document.getElementById("copyTimestampBtn");
+const copyAiBtn = document.getElementById("copyAiBtn");
 
 function setStatus(msg, type = "") {
   statusEl.textContent = msg;
@@ -9,10 +10,10 @@ function setStatus(msg, type = "") {
 }
 
 function setLoading(btn, loading) {
-  btn.disabled = loading;
   btn.classList.toggle("loading", loading);
-  const other = btn === copyBtn ? copyTimestampBtn : copyBtn;
-  other.disabled = loading;
+  [copyBtn, copyTimestampBtn, copyAiBtn].forEach((button) => {
+    button.disabled = loading;
+  });
 }
 
 async function getCurrentTab() {
@@ -20,7 +21,37 @@ async function getCurrentTab() {
   return tab;
 }
 
-async function fetchTranscript(withTimestamps) {
+function getCopyConfig(mode) {
+  if (mode === "timestamps") {
+    return {
+      button: copyTimestampBtn,
+      status: "Fetching transcript with timestamps...",
+      success: "Copied transcript with timestamps!",
+      preview: (response) => response.timestampText,
+      text: (response) => response.timestampText,
+    };
+  }
+
+  if (mode === "ai") {
+    return {
+      button: copyAiBtn,
+      status: "Cleaning transcript for AI...",
+      success: "Copied AI-friendly transcript!",
+      preview: (response) => response.aiFriendlyText,
+      text: (response) => response.aiFriendlyText,
+    };
+  }
+
+  return {
+    button: copyBtn,
+    status: "Fetching transcript...",
+    success: "Copied transcript!",
+    preview: (response) => response.text,
+    text: (response) => response.text,
+  };
+}
+
+async function fetchTranscript(mode = "plain") {
   const tab = await getCurrentTab();
 
   if (!tab?.url?.includes("youtube.com/watch")) {
@@ -28,32 +59,30 @@ async function fetchTranscript(withTimestamps) {
     return;
   }
 
-  const btn = withTimestamps ? copyTimestampBtn : copyBtn;
+  const config = getCopyConfig(mode);
+  const btn = config.button;
   setLoading(btn, true);
-  setStatus("Fetching transcript...");
+  setStatus(config.status);
   previewEl.style.display = "none";
 
   try {
     const response = await chrome.tabs.sendMessage(tab.id, {
       action: "getTranscript",
-      withTimestamps,
+      mode,
     });
 
     if (!response?.ok) {
       throw new Error(response?.error || "Unknown error");
     }
 
-    const textToCopy = withTimestamps
-      ? response.timestampText
-      : response.text;
+    const textToCopy = config.text(response);
 
     await navigator.clipboard.writeText(textToCopy);
 
     const lang = response.trackName ? ` (${response.trackName})` : "";
-    setStatus(`Copied!${lang}`, "success");
+    setStatus(`${config.success}${lang ? lang : ""}`, "success");
 
-    // Show preview of first ~200 chars
-    previewEl.textContent = response.text.slice(0, 300);
+    previewEl.textContent = config.preview(response).slice(0, 300);
     previewEl.style.display = "block";
   } catch (err) {
     // Content script may not be injected yet — inject and retry once
@@ -65,13 +94,13 @@ async function fetchTranscript(withTimestamps) {
         });
         const response = await chrome.tabs.sendMessage(tab.id, {
           action: "getTranscript",
-          withTimestamps,
+          mode,
         });
         if (!response?.ok) throw new Error(response?.error);
-        const textToCopy = withTimestamps ? response.timestampText : response.text;
+        const textToCopy = config.text(response);
         await navigator.clipboard.writeText(textToCopy);
-        setStatus("Copied!", "success");
-        previewEl.textContent = response.text.slice(0, 300);
+        setStatus(config.success, "success");
+        previewEl.textContent = config.preview(response).slice(0, 300);
         previewEl.style.display = "block";
       } catch (retryErr) {
         setStatus(retryErr.message, "error");
@@ -84,8 +113,9 @@ async function fetchTranscript(withTimestamps) {
   }
 }
 
-copyBtn.addEventListener("click", () => fetchTranscript(false));
-copyTimestampBtn.addEventListener("click", () => fetchTranscript(true));
+copyBtn.addEventListener("click", () => fetchTranscript("plain"));
+copyTimestampBtn.addEventListener("click", () => fetchTranscript("timestamps"));
+copyAiBtn.addEventListener("click", () => fetchTranscript("ai"));
 
 // Check on open if we're on a video page
 getCurrentTab().then((tab) => {

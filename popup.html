@@ -85,10 +85,20 @@
       #copyTimestampBtn {
         background: #272727;
         color: #ccc;
+        margin-bottom: 8px;
       }
 
       #copyTimestampBtn:hover:not(:disabled) {
         background: #333;
+      }
+
+      #copyAiBtn {
+        background: #1f6feb;
+        color: #fff;
+      }
+
+      #copyAiBtn:hover:not(:disabled) {
+        background: #1158c7;
       }
 
       .spinner {
@@ -152,6 +162,11 @@
     <button class="btn" id="copyTimestampBtn">
       <span class="spinner"></span>
       <span class="btn-text">Copy with Timestamps</span>
+    </button>
+
+    <button class="btn" id="copyAiBtn">
+      <span class="spinner"></span>
+      <span class="btn-text">Copy AI-Friendly</span>
     </button>
 
     <div id="preview"></div>

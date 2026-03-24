@@ -2,6 +2,99 @@ function wait(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+function cleanSegmentText(text) {
+  return text.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function normalizeTranscriptText(text) {
+  return text
+    .replace(/\s+/g, " ")
+    .replace(/\s+([,.;!?])/g, "$1")
+    .replace(/([([{])\s+/g, "$1")
+    .trim();
+}
+
+function dedupeAdjacentLines(lines) {
+  const unique = [];
+
+  for (const line of lines) {
+    if (line && line !== unique[unique.length - 1]) {
+      unique.push(line);
+    }
+  }
+
+  return unique;
+}
+
+function splitIntoSentences(text) {
+  return text
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+}
+
+function chunkWords(text, maxWords = 110) {
+  const words = text.split(/\s+/).filter(Boolean);
+  const paragraphs = [];
+
+  for (let i = 0; i < words.length; i += maxWords) {
+    paragraphs.push(words.slice(i, i + maxWords).join(" "));
+  }
+
+  return paragraphs;
+}
+
+function groupSentences(sentences, maxSentences = 3, maxChars = 420) {
+  const paragraphs = [];
+  let current = [];
+  let currentChars = 0;
+
+  for (const sentence of sentences) {
+    const nextChars = currentChars + sentence.length + (current.length ? 1 : 0);
+    const shouldFlush =
+      current.length > 0 &&
+      (current.length >= maxSentences || nextChars > maxChars);
+
+    if (shouldFlush) {
+      paragraphs.push(current.join(" "));
+      current = [];
+      currentChars = 0;
+    }
+
+    current.push(sentence);
+    currentChars += sentence.length + (current.length > 1 ? 1 : 0);
+  }
+
+  if (current.length) {
+    paragraphs.push(current.join(" "));
+  }
+
+  return paragraphs;
+}
+
+function getVideoTitle() {
+  return document.title.replace(/\s*-\s*YouTube\s*$/, "").trim();
+}
+
+function buildAiFriendlyTranscript(lines) {
+  const cleanedLines = dedupeAdjacentLines(
+    lines.map(cleanSegmentText).filter(Boolean)
+  );
+  const mergedText = normalizeTranscriptText(cleanedLines.join(" "));
+  const sentences = splitIntoSentences(mergedText);
+  const paragraphs =
+    sentences.length > 1 ? groupSentences(sentences) : chunkWords(mergedText);
+
+  return [
+    `Video Title: ${getVideoTitle()}`,
+    `Video URL: ${location.href}`,
+    "",
+    "Transcript:",
+    "",
+    paragraphs.join("\n\n"),
+  ].join("\n");
+}
+
 function waitForElement(selector, timeout = 5000) {
   return new Promise((resolve, reject) => {
     const el = document.querySelector(selector);
@@ -141,7 +234,9 @@ async function scrapeTranscript() {
 
   for (const seg of segments) {
     const ts = seg.querySelector(".segment-timestamp")?.textContent?.trim() || "";
-    const text = seg.querySelector(".segment-text")?.textContent?.trim() || "";
+    const text = cleanSegmentText(
+      seg.querySelector(".segment-text")?.textContent?.trim() || ""
+    );
     if (!text) continue;
     lines.push(text);
     if (ts) timestampLines.push(`[${ts}] ${text}`);
@@ -150,9 +245,14 @@ async function scrapeTranscript() {
 
   if (!lines.length) throw new Error("No transcript text found.");
 
+  const cleanedLines = dedupeAdjacentLines(lines);
+
   return {
-    text: lines.join(" "),
+    text: normalizeTranscriptText(cleanedLines.join(" ")),
     timestampText: timestampLines.join("\n"),
+    aiFriendlyText: buildAiFriendlyTranscript(cleanedLines),
+    title: getVideoTitle(),
+    url: location.href,
   };
 }
 
