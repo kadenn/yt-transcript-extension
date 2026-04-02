@@ -193,7 +193,11 @@ async function findTranscriptButton() {
 
 async function openTranscriptPanel() {
   // Already open?
-  if (document.querySelector("ytd-transcript-segment-renderer")) return;
+  if (
+    document.querySelector("ytd-transcript-segment-renderer") ||
+    document.querySelector("transcript-segment-view-model")
+  )
+    return;
 
   // Try to expand description (don't fail if it doesn't work)
   await tryExpandDescription();
@@ -218,24 +222,34 @@ async function openTranscriptPanel() {
 
   transcriptBtn.click();
 
-  // Wait for transcript segments to appear
-  await waitForElement("ytd-transcript-segment-renderer", 8000);
+  // Wait for transcript segments to appear (support old and new YouTube DOM)
+  await Promise.race([
+    waitForElement("ytd-transcript-segment-renderer", 8000),
+    waitForElement("transcript-segment-view-model", 8000),
+  ]);
   await wait(400);
 }
 
 async function scrapeTranscript() {
   await openTranscriptPanel();
 
-  const segments = document.querySelectorAll("ytd-transcript-segment-renderer");
+  // Support both old and new YouTube transcript DOM
+  let segments = document.querySelectorAll("transcript-segment-view-model");
+  if (!segments.length) {
+    segments = document.querySelectorAll("ytd-transcript-segment-renderer");
+  }
   if (!segments.length) throw new Error("Transcript panel is empty.");
 
   const lines = [];
   const timestampLines = [];
 
   for (const seg of segments) {
-    const ts = seg.querySelector(".segment-timestamp")?.textContent?.trim() || "";
+    const ts =
+      (seg.querySelector(".ytwTranscriptSegmentViewModelTimestamp") ||
+        seg.querySelector(".segment-timestamp"))?.textContent?.trim() || "";
     const text = cleanSegmentText(
-      seg.querySelector(".segment-text")?.textContent?.trim() || ""
+      (seg.querySelector(".yt-core-attributed-string") ||
+        seg.querySelector(".segment-text"))?.textContent?.trim() || ""
     );
     if (!text) continue;
     lines.push(text);
